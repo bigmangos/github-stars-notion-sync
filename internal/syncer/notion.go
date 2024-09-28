@@ -6,7 +6,7 @@ import (
 
 const (
 	databasePropertyTitle       = "Name"
-	databasePropertyCreatedTime = "Created time"
+	databasePropertyCreatedTime = "Created Time"
 	databasePropertyDescription = "Description"
 	databasePropertyLanguage    = "Language"
 	databasePropertyTopics      = "Topics"

@@ -4,6 +4,8 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/brpaz/github-stars-notion-sync/internal/notifications"
+
 	"github.com/brpaz/github-stars-notion-sync/cmd/root"
 	"github.com/brpaz/github-stars-notion-sync/cmd/sync"
 	versionCmd "github.com/brpaz/github-stars-notion-sync/cmd/version"
@@ -38,7 +40,9 @@ func initSyncer(flags sync.Flags) (sync.Syncer, error) {
 		notionapi.Token(flags.NotionToken),
 	)
 
-	return syncer.New(gitHubClient, notionClient)
+	notification := notifications.NewWechatNotifier(flags.NotificationWechatParams)
+
+	return syncer.New(gitHubClient, notionClient, notification)
 }
 
 func registerCommands(rootCmd *cobra.Command) {

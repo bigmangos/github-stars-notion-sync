@@ -2,14 +2,17 @@ package sync
 
 import (
 	"errors"
+	"fmt"
 
+	"github.com/brpaz/github-stars-notion-sync/internal/log"
 	"github.com/spf13/pflag"
 )
 
 const (
-	FlagGitHubToken      = "github-token"
-	FlagNotionToken      = "notion-token"
-	FlagNotionDatabaseID = "notion-database-id"
+	FlagGitHubToken              = "github-token"
+	FlagNotionToken              = "notion-token"
+	FlagNotionDatabaseID         = "notion-database-id"
+	FLagNotificationWechatParams = "notification-wechat-params"
 )
 
 var (
@@ -20,9 +23,10 @@ var (
 
 // Flags encapsulates all the options that are required to run the sync command
 type Flags struct {
-	GitHubToken      string
-	NotionToken      string
-	NotionDatabaseID string
+	GitHubToken              string
+	NotionToken              string
+	NotionDatabaseID         string
+	NotificationWechatParams string
 }
 
 // a map of required flags and their respective error.
@@ -54,21 +58,25 @@ func parseFlags(flags *pflag.FlagSet) (Flags, error) {
 		return Flags{}, err
 	}
 
-	notionToken, _ := flags.GetString(FlagNotionToken)
-
+	notionToken, err := flags.GetString(FlagNotionToken)
 	if err != nil {
 		return Flags{}, err
 	}
 
-	notionDatabaseID, _ := flags.GetString(FlagNotionDatabaseID)
-
+	notionDatabaseID, err := flags.GetString(FlagNotionDatabaseID)
 	if err != nil {
 		return Flags{}, err
+	}
+
+	notificationWechatParams, err := flags.GetString(FLagNotificationWechatParams)
+	if err != nil {
+		log.Info(nil, fmt.Sprintf("Error parsing flag %s: %s", FLagNotificationWechatParams, err))
 	}
 
 	return Flags{
-		GitHubToken:      gitHubToken,
-		NotionToken:      notionToken,
-		NotionDatabaseID: notionDatabaseID,
+		GitHubToken:              gitHubToken,
+		NotionToken:              notionToken,
+		NotionDatabaseID:         notionDatabaseID,
+		NotificationWechatParams: notificationWechatParams,
 	}, nil
 }

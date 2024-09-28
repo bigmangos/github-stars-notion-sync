@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
-	"github.com/google/go-github/v57/github"
-	"github.com/jomei/notionapi"
+	"github.com/brpaz/github-stars-notion-sync/internal/notifications"
 
 	"github.com/brpaz/github-stars-notion-sync/internal/log"
+	"github.com/google/go-github/v57/github"
+	"github.com/jomei/notionapi"
 )
 
 var (
@@ -22,12 +24,20 @@ const (
 )
 
 type Syncer struct {
-	github *github.Client
-	notion *notionapi.Client
+	github        *github.Client
+	notion        *notionapi.Client
+	notifications *notifications.WechatNotifier
+}
+
+type notificationContent struct {
+	starredReposNum, notionPagesNum int
+	pagesToCreate                   []starredRepo
+	pagesToDelete                   []notionPage
+	createFailed, deleteFailed      []string
 }
 
 // New creates a new Syncer instance with the given github and notion clients
-func New(githubClient *github.Client, notionClient *notionapi.Client) (*Syncer, error) {
+func New(githubClient *github.Client, notionClient *notionapi.Client, notifications *notifications.WechatNotifier) (*Syncer, error) {
 	if githubClient == nil {
 		return nil, ErrNilGithubClient
 	}
@@ -37,8 +47,9 @@ func New(githubClient *github.Client, notionClient *notionapi.Client) (*Syncer, 
 	}
 
 	return &Syncer{
-		github: githubClient,
-		notion: notionClient,
+		github:        githubClient,
+		notion:        notionClient,
+		notifications: notifications,
 	}, nil
 }
 
@@ -190,9 +201,10 @@ func (s *Syncer) doSync(ctx context.Context, databaseID notionapi.DatabaseID, no
 	}
 
 	log.Info(ctx, fmt.Sprintf("found %d pages to create", len(pagesToCreate)))
-
+	var createFailed []string
 	for _, repo := range pagesToCreate {
 		if err := s.createNotionPage(ctx, databaseID, &repo); err != nil {
+			createFailed = append(createFailed, "repo: "+repo.Name+" error: "+err.Error())
 			log.Error(ctx, "error creating notion page", log.String("repo", repo.Name), log.String("error", err.Error()))
 			continue
 		}
@@ -201,8 +213,10 @@ func (s *Syncer) doSync(ctx context.Context, databaseID notionapi.DatabaseID, no
 	}
 
 	log.Info(ctx, fmt.Sprintf("found %d pages to delete", len(pagesToDelete)))
+	var deleteFailed []string
 	for _, page := range pagesToDelete {
 		if err := s.deleteNotionPage(ctx, notionapi.PageID(page.ID)); err != nil {
+			deleteFailed = append(deleteFailed, "page: "+page.Title+" error: "+err.Error())
 			log.Error(ctx, "error deleting notion page", log.String("page", page.Title), log.String("error", err.Error()))
 			continue
 		}
@@ -210,7 +224,58 @@ func (s *Syncer) doSync(ctx context.Context, databaseID notionapi.DatabaseID, no
 		log.Info(ctx, "notion page deleted", log.String("page", page.Title))
 	}
 
+	s.notifications.SendMsg(genNotificationMessage(notificationContent{
+		starredReposNum: len(starredRepos.Repos),
+		notionPagesNum:  len(notionPages.Pages),
+		pagesToCreate:   pagesToCreate,
+		pagesToDelete:   pagesToDelete,
+		createFailed:    createFailed,
+		deleteFailed:    deleteFailed,
+	}))
 	return nil
+}
+
+func genNotificationMessage(content notificationContent) string {
+	var buf strings.Builder
+	buf.WriteString("Github Stars Synced\n\n")
+	buf.WriteString(fmt.Sprintf("Github Stars Num: %d\n", content.starredReposNum))
+	buf.WriteString(fmt.Sprintf("Notion Pages Num: %d\n", content.notionPagesNum))
+	buf.WriteString(fmt.Sprintf("Create Num: %d\n", len(content.pagesToCreate)))
+	buf.WriteString(fmt.Sprintf("Delete Num: %d\n", len(content.pagesToDelete)))
+
+	if len(content.pagesToCreate) > 0 {
+		buf.WriteString("Created: \n")
+		for _, c := range content.pagesToCreate {
+			buf.WriteString(c.Name + "\n")
+		}
+		buf.WriteString("\n")
+	}
+
+	if len(content.pagesToDelete) > 0 {
+		buf.WriteString("Deleted: \n")
+		for _, d := range content.pagesToDelete {
+			buf.WriteString(d.Title + "\n")
+		}
+		buf.WriteString("\n")
+	}
+
+	if len(content.createFailed) > 0 {
+		buf.WriteString("Create Failed: \n")
+		for _, f := range content.createFailed {
+			buf.WriteString(f + "\n")
+		}
+		buf.WriteString("\n")
+	}
+
+	if len(content.deleteFailed) > 0 {
+		buf.WriteString("Delete Failed: \n")
+		for _, f := range content.deleteFailed {
+			buf.WriteString(f + "\n")
+		}
+		buf.WriteString("\n")
+	}
+
+	return buf.String()
 }
 
 func (s *Syncer) createNotionPage(ctx context.Context, databaseID notionapi.DatabaseID, repo *starredRepo) error {

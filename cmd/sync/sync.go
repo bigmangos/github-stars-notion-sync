@@ -35,6 +35,7 @@ func NewCommand(initializerFn SyncerInitializer) *cobra.Command {
 	command.Flags().StringP(FlagGitHubToken, "", os.Getenv("GITHUB_TOKEN"), "A github token to authenticate with the github api")
 	command.Flags().StringP(FlagNotionToken, "", os.Getenv("NOTION_TOKEN"), "A notion token to authenticate with the notion api")
 	command.Flags().StringP(FlagNotionDatabaseID, "", os.Getenv("NOTION_DATABASE_ID"), "The id of the notion database to sync with")
+	command.Flags().StringP(FLagNotificationWechatParams, "w", os.Getenv("NOTIFICATION_WECHAT_PARAMS"), "The wechat params to send notifications to")
 
 	return command
 }
